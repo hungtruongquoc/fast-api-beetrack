@@ -94,6 +94,51 @@ app/
 3. Add service methods with type hints
 4. Write unit tests in `tests/services/`
 
+## Logging
+
+This application uses **structured logging** with `structlog` for better observability and debugging.
+
+### Configuration
+- **Development**: Human-readable console output with colors
+- **Production**: JSON formatted logs for log aggregation tools
+- **Environment Variables**: 
+  - `ENVIRONMENT=development|production` - Controls log format
+  - `LOG_LEVEL=DEBUG|INFO|WARNING|ERROR` - Sets minimum log level
+
+### Usage in Code
+```python
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+# Log with structured data
+logger.info("User action", user_id=123, action="login", success=True)
+logger.warning("Rate limit approached", user_id=123, requests_count=95)
+logger.error("Database error", error_type="connection", retry_count=3)
+```
+
+### Request Context
+The logging middleware automatically adds context to all logs within a request:
+- `request_id`: Unique identifier for request tracing
+- `method`: HTTP method (GET, POST, etc.)
+- `path`: Request path
+- `process_time_ms`: Request processing time
+
+### Best Practices
+1. **Use structured data**: Pass context as key-value pairs, not in message strings
+2. **Consistent field names**: Use `user_id`, `item_id`, etc. consistently across the app
+3. **Appropriate log levels**:
+   - `debug`: Detailed flow information for debugging
+   - `info`: Business operations and successful actions
+   - `warning`: Recoverable errors or concerning conditions
+   - `error`: Unrecoverable errors requiring attention
+
+### Log Levels
+- **info**: Business operations, API calls, successful operations
+- **debug**: Detailed flow information, filter applications, intermediate steps  
+- **warning**: Recoverable errors, not-found scenarios, invalid operations
+- **error**: Unrecoverable errors, exceptions, system failures
+
 ## Important Notes
 
 - **Python Version**: Requires Python 3.9+

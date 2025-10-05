@@ -54,6 +54,10 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8000",
     ]
+    
+    # Logging
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
 
     # Database (placeholder for future use)
     # DATABASE_URL: str = "sqlite:///./app.db"

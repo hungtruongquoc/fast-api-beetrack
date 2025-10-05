@@ -22,6 +22,7 @@ Functions:
 from typing import List, Optional
 
 from app.schemas.item import Item, ItemCreate, ItemUpdate
+from app.core.logging import get_logger
 
 
 class ItemService:
@@ -66,6 +67,7 @@ class ItemService:
         """
         self._items_db: dict[int, Item] = {}
         self._next_id: int = 1
+        self.logger = get_logger(__name__)
 
     def get_all_items(self) -> List[Item]:
         """
@@ -74,7 +76,9 @@ class ItemService:
         Returns:
             List[Item]: List of all items
         """
-        return list(self._items_db.values())
+        items = list(self._items_db.values())
+        self.logger.debug("Retrieved all items", total_items=len(items))
+        return items
 
     def get_item_by_id(self, item_id: int) -> Optional[Item]:
         """
@@ -86,7 +90,12 @@ class ItemService:
         Returns:
             Optional[Item]: The item if found, None otherwise
         """
-        return self._items_db.get(item_id)
+        item = self._items_db.get(item_id)
+        if item:
+            self.logger.debug("Item retrieved", item_id=item_id, item_name=item.name)
+        else:
+            self.logger.debug("Item not found", item_id=item_id)
+        return item
 
     def create_item(self, item_data: ItemCreate) -> Item:
         """
@@ -100,6 +109,13 @@ class ItemService:
         """
         new_item = Item(id=self._next_id, **item_data.model_dump())
         self._items_db[self._next_id] = new_item
+        self.logger.info(
+            "Item created",
+            item_id=self._next_id,
+            item_name=new_item.name,
+            item_price=new_item.price,
+            is_available=new_item.is_available
+        )
         self._next_id += 1
         return new_item
 
@@ -115,12 +131,20 @@ class ItemService:
             Optional[Item]: The updated item if found, None otherwise
         """
         if item_id not in self._items_db:
+            self.logger.warning("Item update failed - item not found", item_id=item_id)
             return None
         
         stored_item = self._items_db[item_id]
         update_data = item_data.model_dump(exclude_unset=True)
         updated_item = stored_item.model_copy(update=update_data)
         self._items_db[item_id] = updated_item
+        
+        self.logger.info(
+            "Item updated",
+            item_id=item_id,
+            item_name=updated_item.name,
+            updated_fields=list(update_data.keys())
+        )
         return updated_item
 
     def delete_item(self, item_id: int) -> bool:
@@ -134,9 +158,12 @@ class ItemService:
             bool: True if item was deleted, False if not found
         """
         if item_id not in self._items_db:
+            self.logger.warning("Item deletion failed - item not found", item_id=item_id)
             return False
         
+        item_name = self._items_db[item_id].name
         del self._items_db[item_id]
+        self.logger.info("Item deleted", item_id=item_id, item_name=item_name)
         return True
 
     def item_exists(self, item_id: int) -> bool:
@@ -174,7 +201,13 @@ class ItemService:
         Returns:
             List[Item]: List of items where is_available is True
         """
-        return [item for item in self._items_db.values() if item.is_available]
+        available_items = [item for item in self._items_db.values() if item.is_available]
+        self.logger.debug(
+            "Retrieved available items",
+            available_count=len(available_items),
+            total_count=len(self._items_db)
+        )
+        return available_items
 
     def get_items_by_price_range(
         self, min_price: float, max_price: float
@@ -189,11 +222,19 @@ class ItemService:
         Returns:
             List[Item]: List of items within the price range
         """
-        return [
+        filtered_items = [
             item
             for item in self._items_db.values()
             if min_price <= item.price <= max_price
         ]
+        self.logger.debug(
+            "Filtered items by price range",
+            min_price=min_price,
+            max_price=max_price,
+            filtered_count=len(filtered_items),
+            total_count=len(self._items_db)
+        )
+        return filtered_items
 
     def search_items_by_name(self, search_term: str) -> List[Item]:
         """
@@ -206,11 +247,18 @@ class ItemService:
             List[Item]: List of items matching the search term
         """
         search_term_lower = search_term.lower()
-        return [
+        matching_items = [
             item
             for item in self._items_db.values()
             if search_term_lower in item.name.lower()
         ]
+        self.logger.debug(
+            "Searched items by name",
+            search_term=search_term,
+            matching_count=len(matching_items),
+            total_count=len(self._items_db)
+        )
+        return matching_items
 
 
 # Singleton instance for the application
