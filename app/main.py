@@ -19,6 +19,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.logging import configure_logging, get_logger
+from app.middleware.logging import LoggingMiddleware
+
+# Configure logging on startup
+configure_logging()
+logger = get_logger(__name__)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -26,6 +32,9 @@ app = FastAPI(
     description="FastAPI Bee - API Backend",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
 )
+
+# Add logging middleware (should be first to capture all requests)
+app.add_middleware(LoggingMiddleware)
 
 # Set up CORS
 app.add_middleware(
@@ -58,6 +67,7 @@ async def root():
             "docs": "/docs"
         }
     """
+    logger.info("Root endpoint accessed")
     return {
         "message": "Welcome to FastAPI Bee",
         "version": settings.VERSION,
@@ -81,5 +91,6 @@ async def health_check():
             "status": "healthy"
         }
     """
+    logger.debug("Health check endpoint accessed")
     return {"status": "healthy"}
 
