@@ -36,13 +36,17 @@ This FastAPI application follows a **layered architecture** pattern:
 1. **API Layer** (`app/api/v1/`) - HTTP request/response handling, routing, OpenAPI documentation
 2. **Service Layer** (`app/services/`) - Business logic, data operations, reusable across endpoints
 3. **Schema Layer** (`app/schemas/`) - Pydantic models for validation, serialization, type checking
-4. **Core Layer** (`app/core/`) - Configuration management, settings, utilities
+4. **Core Layer** (`app/core/`) - Configuration management, settings, logging utilities
+5. **Middleware Layer** (`app/middleware/`) - Request/response processing, logging context injection
 
 ### Key Patterns
 - **Dependency Injection**: Services are injected via FastAPI's Depends() system
 - **Pydantic Validation**: All request/response data is validated using Pydantic v2 models
-- **Singleton Services**: ItemService uses singleton pattern for shared state management
+- **Singleton Services**: Services use singleton pattern for shared state management
 - **API Versioning**: All endpoints are versioned under `/api/v1/` prefix
+- **OAuth Authentication**: Token-based authentication with automatic token refresh
+- **HTTP Client Abstraction**: Centralized HTTP client service for external API calls
+- **Token Caching**: In-memory token caching with expiration buffer for performance
 
 ### File Structure
 ```
@@ -52,8 +56,16 @@ app/
 │   ├── router.py             # Main router aggregating all endpoints
 │   └── endpoints/            # Individual resource endpoints
 ├── services/                 # Business logic layer
+│   ├── item_service.py       # Item business operations
+│   ├── http_client_service.py # HTTP client for external API calls
+│   ├── oauth_authentication_service.py # OAuth token management
+│   └── auth_token_cache_service.py # Token caching and refresh
 ├── schemas/                  # Pydantic models
-└── core/                     # Configuration and settings
+├── core/                     # Configuration and utilities
+│   ├── config.py             # Application settings
+│   └── logging.py            # Structured logging configuration
+└── middleware/               # Request/response processing
+    └── logging.py            # Request context injection
 ```
 
 ## Configuration
@@ -139,6 +151,32 @@ The logging middleware automatically adds context to all logs within a request:
 - **warning**: Recoverable errors, not-found scenarios, invalid operations
 - **error**: Unrecoverable errors, exceptions, system failures
 
+## External API Integration
+
+This application includes services for OAuth authentication and HTTP client management:
+
+### HTTP Client Service
+- **Purpose**: Centralized HTTP client for external API calls with proper error handling
+- **Features**: Configurable timeouts, automatic retries, structured logging
+- **Usage**: Inject `get_http_client_service()` into endpoints or services
+
+### OAuth Authentication Service  
+- **Purpose**: Manages OAuth client credentials flow for external system authentication
+- **Features**: Automatic token refresh, thread-safe operations, proper error handling
+- **Configuration**: Set `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, and `OAUTH_TOKEN_URL` in environment
+
+### Token Cache Service
+- **Purpose**: In-memory caching of OAuth tokens with expiration management
+- **Features**: Automatic refresh before expiration, configurable buffer time
+- **Configuration**: Set `TOKEN_EXPIRATION_BUFFER_SECONDS` (default: 300 seconds)
+
+### Environment Variables for External APIs
+- `HTTP_CLIENT_TIMEOUT`: Default timeout for HTTP requests (default: 30.0 seconds)
+- `OAUTH_CLIENT_ID`: OAuth client ID for external system authentication
+- `OAUTH_CLIENT_SECRET`: OAuth client secret for external system authentication  
+- `OAUTH_TOKEN_URL`: OAuth token endpoint URL
+- `TOKEN_EXPIRATION_BUFFER_SECONDS`: Buffer time before token expiration (default: 300)
+
 ## Important Notes
 
 - **Python Version**: Requires Python 3.9+
@@ -146,3 +184,5 @@ The logging middleware automatically adds context to all logs within a request:
 - **Pydantic**: Uses Pydantic v2 for all data validation
 - **Environment**: Always run commands through Poetry for dependency isolation
 - **Scripts**: Use `./scripts/run.sh` for consistent development experience
+- **External APIs**: OAuth tokens are cached in memory and automatically refreshed
+- **HTTP Clients**: Use the centralized HTTP client service for all external API calls

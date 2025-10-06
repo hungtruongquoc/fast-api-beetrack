@@ -30,14 +30,28 @@ from app.core.config import settings
 class AuthTokenCacheService:
     """
     Service for caching authentication tokens with expiration tracking
-    
+
     This service stores authentication tokens in memory along with their
     expiration timestamps. It implements a buffer mechanism to ensure
     tokens are considered expired before their actual expiration time,
     allowing for proactive token refresh.
-    
+
     The service is thread-safe using asyncio.Lock for concurrent access
     protection in async environments.
+
+    Current Implementation: In-memory storage (instance variables)
+
+    FUTURE ENHANCEMENT: For production multi-instance deployments, consider
+    implementing pluggable storage backends (Redis, database, etc.) using
+    the Strategy Pattern. See specs/oauth_authentication_token_management.md
+    section "Token Storage Backend Extensibility" for detailed design and
+    implementation guidance.
+
+    When to migrate:
+    - Horizontal scaling (multiple app instances)
+    - High availability requirements
+    - Token persistence across restarts needed
+    - Production deployment with load balancing
     
     Attributes:
         _token (Optional[str]): The cached authentication token
