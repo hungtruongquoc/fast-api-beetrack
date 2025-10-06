@@ -12,8 +12,6 @@ Environment Variables:
     OAUTH_CLIENT_ID: OAuth client ID for external system authentication
     OAUTH_CLIENT_SECRET: OAuth client secret for external system authentication
     OAUTH_TOKEN_URL: OAuth token endpoint URL
-    OAUTH_AUTHORIZE_URL: OAuth authorization endpoint URL
-    OAUTH_REDIRECT_URI: OAuth redirect URI for callback
 
 Example .env file:
     PROJECT_NAME="My API"
@@ -43,8 +41,6 @@ class Settings(BaseSettings):
         OAUTH_CLIENT_ID (str): OAuth client ID for external system
         OAUTH_CLIENT_SECRET (str): OAuth client secret for external system
         OAUTH_TOKEN_URL (str): OAuth token endpoint URL
-        OAUTH_AUTHORIZE_URL (str): OAuth authorization endpoint URL
-        OAUTH_REDIRECT_URI (str): OAuth redirect URI for callback
 
     Configuration:
         - Reads from .env file if present
@@ -72,12 +68,10 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
 
-    # OAuth Configuration
+    # OAuth Configuration (Backend-to-Backend)
     OAUTH_CLIENT_ID: str = ""
     OAUTH_CLIENT_SECRET: str = ""
     OAUTH_TOKEN_URL: str = ""
-    OAUTH_AUTHORIZE_URL: str = ""
-    OAUTH_REDIRECT_URI: str = ""
 
     # Database (placeholder for future use)
     # DATABASE_URL: str = "sqlite:///./app.db"
