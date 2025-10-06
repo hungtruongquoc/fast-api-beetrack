@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # FastAPI application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi-bee
+    ports:
+      - "8000:8000"
+    environment:
+      # Application settings
+      - PROJECT_NAME=FastAPI Bee
+      - VERSION=0.1.0
+      - API_V1_STR=/api/v1
+      # Logging
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      # CORS - customize as needed
+      - ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:8000"]
+    # Uncomment to mount .env file instead of using environment variables
+    # env_file:
+    #   - .env
+    volumes:
+      # Mount application code for development (comment out for production)
+      # - ./app:/app/app:ro
+      # Mount logs directory (optional)
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - fastapi-network
+
+  # Uncomment to add a database service (PostgreSQL example)
+  # db:
+  #   image: postgres:15-alpine
+  #   container_name: fastapi-bee-db
+  #   environment:
+  #     - POSTGRES_USER=fastapi
+  #     - POSTGRES_PASSWORD=fastapi
+  #     - POSTGRES_DB=fastapi_bee
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+  #   networks:
+  #     - fastapi-network
+
+  # Uncomment to add Redis for caching
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: fastapi-bee-redis
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped
+  #   networks:
+  #     - fastapi-network
+
+networks:
+  fastapi-network:
+    driver: bridge
+
+# Uncomment if using database
+# volumes:
+#   postgres_data:
+
