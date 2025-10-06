@@ -17,6 +17,68 @@ This specification outlines the implementation of OAuth 2.0 Client Credentials f
 5. Ensure thread-safe token management for concurrent requests
 6. Provide comprehensive testing at each layer
 
+## Design Decisions
+
+### Why Three Separate Services?
+
+**Decision**: Split functionality into HTTPClientService, AuthTokenCacheService, and OAuthAuthenticationService rather than a single monolithic service.
+
+**Rationale**:
+1. **Single Responsibility Principle**: Each service has one clear purpose
+   - HTTPClientService: Make HTTP requests
+   - AuthTokenCacheService: Store and retrieve tokens
+   - OAuthAuthenticationService: Orchestrate OAuth flow
+
+2. **Reusability**: HTTPClientService can be used for any HTTP calls, not just OAuth
+   - Weather API calls
+   - Payment gateway integrations
+   - Any third-party API integration
+
+3. **Testability**: Each service can be tested in isolation with mocked dependencies
+   - Test HTTP client without needing OAuth logic
+   - Test token cache without needing HTTP calls
+   - Test OAuth service with mocked HTTP and cache
+
+4. **Flexibility**: Different services can compose these building blocks differently
+   - Some services need OAuth + HTTP
+   - Some services only need HTTP
+   - Some services only need token status
+
+5. **Maintainability**: Changes to HTTP logic don't affect token caching and vice versa
+
+### Why Not Inject Token Services into HTTPClientService?
+
+**Decision**: HTTPClientService remains a generic HTTP utility without authentication knowledge.
+
+**Rationale**:
+1. **Generic Utility**: HTTPClientService should work for any HTTP call, authenticated or not
+2. **Separation of Concerns**: HTTP transport layer shouldn't know about authentication mechanisms
+3. **Multiple Auth Types**: Future authentication methods (API keys, JWT, etc.) can use the same HTTP client
+4. **Explicit Control**: Calling code explicitly decides when and how to add authentication
+
+**Alternative Considered**: Auto-inject tokens into all requests
+- **Rejected because**: Not all HTTP calls need authentication; would create tight coupling
+
+### Why Singleton Pattern?
+
+**Decision**: Use singleton pattern for all three services.
+
+**Rationale**:
+1. **Shared State**: Token cache must be shared across the application
+2. **Resource Efficiency**: Single HTTP client connection pool for all requests
+3. **Consistency**: All parts of the application see the same token state
+4. **FastAPI Compatibility**: Works well with FastAPI's dependency injection
+
+### Why Configurable Expiration Buffer?
+
+**Decision**: Make token expiration buffer configurable via environment variable.
+
+**Rationale**:
+1. **Proactive Refresh**: Prevents using tokens that are about to expire
+2. **Network Latency**: Accounts for time taken to make API calls
+3. **Environment-Specific**: Different environments may need different buffers
+4. **Safety Margin**: Reduces risk of authentication failures mid-request
+
 ## Architecture
 
 ### Component Overview
@@ -44,6 +106,162 @@ This specification outlines the implementation of OAuth 2.0 Client Credentials f
 │ - clear_token()          │  │   - delete()                 │
 └──────────────────────────┘  └──────────────────────────────┘
 ```
+
+### Dependency Injection Strategy
+
+**Key Principle: The calling service/application decides how to orchestrate these services based on its needs.**
+
+#### Service Roles:
+
+1. **HTTPClientService** - Generic HTTP utility (no authentication knowledge)
+   - Purpose: Make HTTP requests to any external API
+   - Dependencies: None (standalone utility)
+   - Inject when: You need to make HTTP calls (authenticated or not)
+
+2. **AuthTokenCacheService** - Token storage (internal use only)
+   - Purpose: Store and retrieve tokens with expiration tracking
+   - Dependencies: None (standalone storage)
+   - Inject when: Typically NOT injected directly; used internally by OAuthAuthenticationService
+
+3. **OAuthAuthenticationService** - Token lifecycle orchestrator
+   - Purpose: Manage OAuth token acquisition, caching, and refresh
+   - Dependencies: HTTPClientService + AuthTokenCacheService + Settings
+   - Inject when: You need OAuth tokens for authenticated API calls
+
+#### Orchestration Patterns:
+
+**Pattern 1: Unauthenticated HTTP Calls**
+```python
+class WeatherService:
+    def __init__(self, http_client: HTTPClientService):
+        self.http_client = http_client
+
+    async def get_weather(self, city: str):
+        # Direct HTTP call - no authentication needed
+        response = await self.http_client.get(
+            f"https://api.weather.com/data?city={city}"
+        )
+        return response["body"]
+```
+
+**Pattern 2: Authenticated HTTP Calls (OAuth)**
+```python
+class BeeTrackAPIService:
+    def __init__(
+        self,
+        http_client: HTTPClientService,
+        oauth_service: OAuthAuthenticationService
+    ):
+        self.http_client = http_client
+        self.oauth_service = oauth_service
+
+    async def get_delivery_data(self, delivery_id: str):
+        # Step 1: Get valid OAuth token
+        token = await self.oauth_service.get_valid_token()
+
+        # Step 2: Use token in authenticated HTTP call
+        response = await self.http_client.get(
+            f"https://api.beetrack.com/deliveries/{delivery_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        return response["body"]
+```
+
+**Pattern 3: Token Management Only**
+```python
+class AuthManagementService:
+    def __init__(self, oauth_service: OAuthAuthenticationService):
+        self.oauth_service = oauth_service
+
+    async def get_auth_status(self):
+        # Only need token status, no HTTP calls
+        token = await self.oauth_service.get_valid_token()
+        return {"authenticated": token is not None}
+```
+
+#### FastAPI Endpoint Examples:
+
+```python
+# Endpoint with authenticated external API call
+@router.get("/deliveries/{delivery_id}")
+async def get_delivery(
+    delivery_id: str,
+    http_client: HTTPClientService = Depends(get_http_client_service),
+    oauth_service: OAuthAuthenticationService = Depends(get_oauth_authentication_service)
+):
+    token = await oauth_service.get_valid_token()
+    response = await http_client.get(
+        f"https://api.beetrack.com/deliveries/{delivery_id}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    return response["body"]
+
+# Endpoint for auth status only
+@router.get("/auth/status")
+async def auth_status(
+    oauth_service: OAuthAuthenticationService = Depends(get_oauth_authentication_service)
+):
+    cache_service = oauth_service.cache_service
+    return cache_service.get_expiration_info()
+```
+
+#### Design Benefits:
+
+1. **Separation of Concerns**: Each service has a single, well-defined responsibility
+2. **Flexibility**: Services can be composed differently for different use cases
+3. **Testability**: Each service can be tested independently with mocked dependencies
+4. **Reusability**: HTTPClientService can be used for any HTTP calls, not just OAuth
+5. **No Tight Coupling**: Services don't know about each other's internal implementation
+6. **Clear Dependencies**: Dependency injection makes relationships explicit
+
+### OAuthAuthenticationService Internal Structure
+
+The OAuthAuthenticationService acts as the orchestrator that brings together HTTPClientService and AuthTokenCacheService:
+
+```python
+class OAuthAuthenticationService:
+    def __init__(
+        self,
+        http_client: HTTPClientService,
+        cache_service: AuthTokenCacheService,
+        settings: Settings
+    ):
+        self.http_client = http_client        # For making OAuth token requests
+        self.cache_service = cache_service    # For storing/retrieving tokens
+        self.settings = settings              # For OAuth configuration
+
+    async def get_valid_token(self) -> Optional[str]:
+        # Check cache first
+        token = self.cache_service.get_token()
+        if token:
+            return token
+
+        # Token expired/missing, request new one
+        return await self.request_token()
+
+    async def request_token(self) -> str:
+        # Use HTTPClientService to make OAuth request
+        response = await self.http_client.post(
+            self.settings.OAUTH_TOKEN_URL,
+            data={
+                "client_id": self.settings.OAUTH_CLIENT_ID,
+                "client_secret": self.settings.OAUTH_CLIENT_SECRET,
+                "grant_type": "client_credentials"
+            }
+        )
+
+        # Store in cache using AuthTokenCacheService
+        token = response["body"]["access_token"]
+        expires_in = response["body"]["expires_in"]
+        self.cache_service.set_token(token, expires_in)
+
+        return token
+```
+
+**Why this design?**
+- OAuthAuthenticationService doesn't make HTTP calls directly - it delegates to HTTPClientService
+- OAuthAuthenticationService doesn't manage token storage - it delegates to AuthTokenCacheService
+- This keeps each service focused and allows them to be reused independently
 
 ### Service Responsibilities
 

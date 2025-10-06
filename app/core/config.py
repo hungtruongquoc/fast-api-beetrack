@@ -10,6 +10,7 @@ Environment Variables:
     API_V1_STR: API v1 prefix (default: "/api/v1")
     ALLOWED_ORIGINS: Comma-separated list of allowed CORS origins
     HTTP_CLIENT_TIMEOUT: Default timeout for HTTP client requests in seconds
+    TOKEN_EXPIRATION_BUFFER_SECONDS: Buffer time before token expiration to trigger refresh
     OAUTH_CLIENT_ID: OAuth client ID for external system authentication
     OAUTH_CLIENT_SECRET: OAuth client secret for external system authentication
     OAUTH_TOKEN_URL: OAuth token endpoint URL
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
         API_V1_STR (str): URL prefix for API v1 endpoints
         ALLOWED_ORIGINS (List[str]): List of allowed CORS origins
         HTTP_CLIENT_TIMEOUT (float): Default timeout for HTTP client requests in seconds
+        TOKEN_EXPIRATION_BUFFER_SECONDS (int): Buffer time before token expiration to trigger refresh
         OAUTH_CLIENT_ID (str): OAuth client ID for external system
         OAUTH_CLIENT_SECRET (str): OAuth client secret for external system
         OAUTH_TOKEN_URL (str): OAuth token endpoint URL
@@ -72,6 +74,9 @@ class Settings(BaseSettings):
 
     # HTTP Client Configuration
     HTTP_CLIENT_TIMEOUT: float = 30.0
+
+    # Token Cache Configuration
+    TOKEN_EXPIRATION_BUFFER_SECONDS: int = 300  # 5 minutes
 
     # OAuth Configuration (Backend-to-Backend)
     OAUTH_CLIENT_ID: str = ""
