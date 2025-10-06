@@ -311,6 +311,173 @@ This project follows a **layered architecture** pattern with clear separation of
    # Edit .env with your configuration
    ```
 
+## ⚙️ Configuration & Environment Variables
+
+This application uses **Pydantic Settings v2** for configuration management, which provides automatic loading and validation of environment variables from `.env` files.
+
+### How Environment Variables Work
+
+#### 1. **Configuration Flow**
+
+```
+.env file → Pydantic Settings → app/core/config.py → Application
+```
+
+The configuration is loaded in the following priority order (highest to lowest):
+1. **System environment variables** (highest priority)
+2. **`.env` file** values
+3. **Default values** in `Settings` class (lowest priority)
+
+#### 2. **The Role of `.env` and `.env.example`**
+
+| File | Purpose | Git Tracking | Usage |
+|------|---------|--------------|-------|
+| **`.env.example`** | Template with safe default values | ✅ Tracked in git | Reference for required variables |
+| **`.env`** | Your actual configuration with secrets | ❌ Not tracked (in `.gitignore`) | Used by the application |
+
+**Why two files?**
+- `.env.example` serves as **documentation** showing what variables are available
+- `.env` contains **your actual values** (including secrets) and should never be committed
+- New developers can quickly set up by copying: `cp .env.example .env`
+
+#### 3. **Configuration Implementation**
+
+The configuration is defined in `app/core/config.py`:
+
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    # Application settings
+    PROJECT_NAME: str = "FastAPI Bee"
+    VERSION: str = "0.1.0"
+    API_V1_STR: str = "/api/v1"
+
+    # CORS configuration
+    ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ]
+
+    # Logging
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
+
+    # Pydantic Settings configuration
+    model_config = SettingsConfigDict(
+        env_file=".env",           # Automatically load from .env
+        case_sensitive=True,       # Variable names must match exactly
+        extra="allow"              # Allow extra variables
+    )
+
+# Singleton instance
+settings = Settings()
+```
+
+#### 4. **How Settings Are Injected Into the App**
+
+**Automatic Loading:**
+```python
+# app/core/config.py
+settings = Settings()  # Automatically loads .env file on import
+```
+
+**Usage Throughout the Application:**
+```python
+# In any module
+from app.core.config import settings
+
+# Access configuration values
+print(settings.PROJECT_NAME)
+print(settings.LOG_LEVEL)
+print(settings.ALLOWED_ORIGINS)
+```
+
+**Example in `app/main.py`:**
+```python
+from app.core.config import settings
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+)
+```
+
+#### 5. **Available Environment Variables**
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `PROJECT_NAME` | string | `"FastAPI Bee"` | Application name shown in API docs |
+| `VERSION` | string | `"0.1.0"` | API version number |
+| `API_V1_STR` | string | `"/api/v1"` | URL prefix for API v1 endpoints |
+| `ALLOWED_ORIGINS` | list | `["http://localhost:3000", ...]` | CORS allowed origins |
+| `ENVIRONMENT` | string | `"development"` | Environment: `development` or `production` |
+| `LOG_LEVEL` | string | `"INFO"` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+
+**Future Variables (Placeholders):**
+- `DATABASE_URL` - Database connection string
+- `SECRET_KEY` - JWT secret key for authentication
+- `ALGORITHM` - JWT algorithm (e.g., HS256)
+- `ACCESS_TOKEN_EXPIRE_MINUTES` - Token expiration time
+
+#### 6. **Setting Up Your Environment**
+
+**For Development:**
+```bash
+# Copy the example file
+cp .env.example .env
+
+# Edit .env with your preferred settings
+# Example .env for development:
+ENVIRONMENT=development
+LOG_LEVEL=DEBUG
+PROJECT_NAME=FastAPI Bee Dev
+```
+
+**For Production:**
+```bash
+# Use production-safe values
+ENVIRONMENT=production
+LOG_LEVEL=INFO
+PROJECT_NAME=FastAPI Bee
+# Add your production secrets
+SECRET_KEY=your-secure-random-secret-key
+DATABASE_URL=postgresql://user:pass@localhost/dbname
+```
+
+**Using System Environment Variables:**
+```bash
+# Override .env values with system environment variables
+export LOG_LEVEL=DEBUG
+export PROJECT_NAME="My Custom API"
+./scripts/run.sh dev
+```
+
+#### 7. **Benefits of Pydantic Settings**
+
+- ✅ **Type Safety** - All settings are type-checked at runtime
+- ✅ **Validation** - Invalid values are caught immediately on startup
+- ✅ **Auto-completion** - IDE support for settings attributes
+- ✅ **Documentation** - Settings are self-documenting with type hints
+- ✅ **No Manual Parsing** - No need for `python-dotenv` or manual `os.getenv()`
+- ✅ **Environment Flexibility** - Easy to override for different environments
+- ✅ **Secrets Management** - Keep secrets out of code and git
+
+#### 8. **Best Practices**
+
+1. **Never commit `.env`** - Always keep it in `.gitignore`
+2. **Keep `.env.example` updated** - Document all required variables
+3. **Use descriptive names** - Make variable purposes clear
+4. **Set safe defaults** - Provide sensible defaults for development
+5. **Validate on startup** - Let Pydantic catch configuration errors early
+6. **Use type hints** - Leverage Pydantic's type validation
+7. **Document variables** - Add comments in `.env.example`
+
 ## 🚀 Running the Application
 
 ### Quick Start with Scripts
@@ -790,30 +957,100 @@ The application uses **Pydantic Settings** for configuration management:
 - Type validation ensures correct configuration
 - `.env` file is loaded automatically
 
-## 🚢 Deployment
+## 🐳 Docker Deployment
 
-### Docker Deployment (Coming Soon)
+This project includes comprehensive Docker support for both development and production environments.
 
-```dockerfile
-# Example Dockerfile structure
-FROM python:3.9-slim
-WORKDIR /app
-COPY pyproject.toml poetry.lock ./
-RUN pip install poetry && poetry install --no-dev
-COPY ./app ./app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+### Quick Start with Docker
+
+**Production Mode:**
+```bash
+# Build and start the container
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the container
+docker-compose down
 ```
+
+**Development Mode (with hot-reload):**
+```bash
+# Build and start development container
+docker-compose -f docker-compose.dev.yml up
+
+# Stop the container
+docker-compose -f docker-compose.dev.yml down
+```
+
+### Using the Docker Script
+
+We provide a convenient script for Docker operations:
+
+```bash
+# Production commands
+./scripts/docker.sh build         # Build production image
+./scripts/docker.sh up            # Start production containers
+./scripts/docker.sh down          # Stop containers
+./scripts/docker.sh logs          # View logs
+./scripts/docker.sh status        # Check status
+
+# Development commands
+./scripts/docker.sh dev-build     # Build development image
+./scripts/docker.sh dev-up        # Start with hot-reload
+./scripts/docker.sh dev-shell     # Open shell in container
+
+# Management commands
+./scripts/docker.sh test          # Run tests in container
+./scripts/docker.sh shell         # Open bash shell
+./scripts/docker.sh health        # Check health status
+./scripts/docker.sh clean         # Remove containers and images
+
+# See all commands
+./scripts/docker.sh help
+```
+
+### Docker Files Overview
+
+- **`Dockerfile`** - Production-ready multi-stage build
+- **`Dockerfile.dev`** - Development version with hot-reload
+- **`docker-compose.yml`** - Production orchestration
+- **`docker-compose.dev.yml`** - Development orchestration
+- **`.dockerignore`** - Files excluded from Docker build
+- **`DOCKER.md`** - Comprehensive Docker documentation
+
+### Access Points (Docker)
+
+Once the Docker container is running:
+
+- **API Base URL**: http://localhost:8000
+- **Interactive API Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+
+### Docker Features
+
+- ✅ **Multi-stage builds** - Optimized image size
+- ✅ **Non-root user** - Enhanced security
+- ✅ **Health checks** - Built-in monitoring
+- ✅ **Hot-reload** - Development mode support
+- ✅ **Environment variables** - Flexible configuration
+- ✅ **Volume mounts** - Persistent data support
 
 ### Production Considerations
 
 1. **Use environment variables** for sensitive configuration
 2. **Set up proper CORS** origins for your frontend
-3. **Use HTTPS** in production
+3. **Use HTTPS** in production (reverse proxy recommended)
 4. **Configure logging** for monitoring
 5. **Set up database** connection pooling
 6. **Use multiple workers** for Uvicorn
 7. **Implement rate limiting** for API endpoints
 8. **Add authentication/authorization** as needed
+9. **Use Docker secrets** for sensitive data
+10. **Set resource limits** (CPU, memory) in production
+
+For detailed Docker documentation, see **[DOCKER.md](DOCKER.md)**.
 
 ## 🤝 Contributing
 
@@ -916,11 +1153,12 @@ poetry run uvicorn app.main:app --reload --port 8001
 - ✅ FastAPI application structure
 - ✅ Pydantic schemas
 - ✅ CRUD endpoints for items
-- ✅ Comprehensive test suite (54 tests)
+- ✅ Comprehensive test suite (77+ tests)
 - ✅ API documentation
+- ✅ Structured logging with structlog
+- ✅ Docker containerization (production & development)
 - ⏳ Database integration (planned)
 - ⏳ Authentication/Authorization (planned)
-- ⏳ Docker containerization (planned)
 - ⏳ CI/CD pipeline (planned)
 
 ## 📄 License
