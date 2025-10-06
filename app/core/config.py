@@ -9,11 +9,19 @@ Environment Variables:
     VERSION: API version (default: "0.1.0")
     API_V1_STR: API v1 prefix (default: "/api/v1")
     ALLOWED_ORIGINS: Comma-separated list of allowed CORS origins
+    OAUTH_CLIENT_ID: OAuth client ID for external system authentication
+    OAUTH_CLIENT_SECRET: OAuth client secret for external system authentication
+    OAUTH_TOKEN_URL: OAuth token endpoint URL
+    OAUTH_AUTHORIZE_URL: OAuth authorization endpoint URL
+    OAUTH_REDIRECT_URI: OAuth redirect URI for callback
 
 Example .env file:
     PROJECT_NAME="My API"
     VERSION="1.0.0"
     ALLOWED_ORIGINS="http://localhost:3000,https://example.com"
+    OAUTH_CLIENT_ID="your-client-id"
+    OAUTH_CLIENT_SECRET="your-client-secret"
+    OAUTH_TOKEN_URL="https://oauth-provider.com/token"
 """
 
 from typing import List
@@ -32,6 +40,11 @@ class Settings(BaseSettings):
         VERSION (str): Current version of the API
         API_V1_STR (str): URL prefix for API v1 endpoints
         ALLOWED_ORIGINS (List[str]): List of allowed CORS origins
+        OAUTH_CLIENT_ID (str): OAuth client ID for external system
+        OAUTH_CLIENT_SECRET (str): OAuth client secret for external system
+        OAUTH_TOKEN_URL (str): OAuth token endpoint URL
+        OAUTH_AUTHORIZE_URL (str): OAuth authorization endpoint URL
+        OAUTH_REDIRECT_URI (str): OAuth redirect URI for callback
 
     Configuration:
         - Reads from .env file if present
@@ -58,6 +71,13 @@ class Settings(BaseSettings):
     # Logging
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
+
+    # OAuth Configuration
+    OAUTH_CLIENT_ID: str = ""
+    OAUTH_CLIENT_SECRET: str = ""
+    OAUTH_TOKEN_URL: str = ""
+    OAUTH_AUTHORIZE_URL: str = ""
+    OAUTH_REDIRECT_URI: str = ""
 
     # Database (placeholder for future use)
     # DATABASE_URL: str = "sqlite:///./app.db"
